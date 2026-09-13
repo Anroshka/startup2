@@ -1,0 +1,7 @@
+'use client';
+import {useState,useEffect,useRef} from 'react';
+import {emptyState,type ProductState} from './product';
+export function useProduct(signedIn:boolean){const [state,setState]=useState<ProductState>(emptyState),[loading,setLoading]=useState(signedIn),[error,setError]=useState(''),[saving,setSaving]=useState(false);const revision=useRef(0),busy=useRef(false),loaded=useRef(!signedIn);
+async function reload(){if(!signedIn)return;setLoading(true);setError('');try{const r=await fetch('/api/state',{cache:'no-store'}),d=await r.json() as {error?:string,state:ProductState,revision:number};if(!r.ok)throw new Error(d.error);setState(d.state);revision.current=d.revision;loaded.current=true}catch(e){setError(e instanceof Error?e.message:'Не удалось загрузить данные.')}finally{setLoading(false)}}
+useEffect(()=>{void reload()},[signedIn]);
+async function save(next:ProductState){if(!signedIn)throw new Error('Для сохранения нужно войти.');if(!loaded.current)throw new Error('Сначала загрузите данные.');if(busy.current)throw new Error('Дождитесь завершения сохранения.');busy.current=true;setSaving(true);try{const r=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({state:next,revision:revision.current})});const d=await r.json() as {error?:string,state:ProductState,revision:number};if(!r.ok)throw new Error(d.error);revision.current=d.revision;setState(next);return next}finally{busy.current=false;setSaving(false)}}return {state,loading,error,saving,save,reload};}
