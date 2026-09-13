@@ -1,0 +1,21 @@
+name: Export Vercel source
+on:
+  push:
+    branches: [deploy/vercel-jobpilot]
+    paths: ['.github/workflows/export-vercel-source.yml']
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: deploy/vercel-jobpilot
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jobpilot-web-source
+          path: web
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 6
