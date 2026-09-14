@@ -1,26 +1,299 @@
-import { z } from 'zod';
-export const statuses=['Сохранено','Готовится','Отправлено','Интервью','Оффер','Отказ','Архив'] as const;
-export const profileSchema=z.object({name:z.string().trim().min(1).max(100),role:z.string().trim().min(2).max(160),city:z.string().trim().max(100),salary:z.number().int().min(0).max(10000000),format:z.enum(['Любой','Удалённо','Гибрид','Офис']),experience:z.enum(['Без опыта','1–3 года','3–6 лет','Более 6 лет']),skills:z.string().max(2000),resume:z.string().max(20000),preferences:z.string().max(2000)});
-export type Profile=z.infer<typeof profileSchema>;
-export const jobSchema=z.object({id:z.string().max(80),title:z.string().trim().min(2).max(160),company:z.string().trim().min(1).max(100),city:z.string().max(100),salaryMin:z.number().min(0).max(10000000),salaryMax:z.number().min(0).max(10000000),format:z.enum(['Удалённо','Гибрид','Офис']),experience:z.string().max(60),skills:z.array(z.string().trim().min(1).max(80)).max(30),description:z.string().max(15000),url:z.string().max(2048).refine(v=>!v||/^https:\/\//i.test(v),'Нужна ссылка https://'),demo:z.boolean()}).refine(j=>j.salaryMax===0||j.salaryMax>=j.salaryMin,'Верхняя граница зарплаты меньше нижней');
-export type Job=z.infer<typeof jobSchema>;
-const applicationSchema=z.object({jobId:z.string().max(80),status:z.enum(statuses),notes:z.string().max(5000),nextDate:z.string().max(10),letter:z.string().max(20000),resume:z.string().max(30000),updatedAt:z.string().max(40),history:z.array(z.object({status:z.enum(statuses),date:z.string().max(40)})).max(100)});
-export type Application=z.infer<typeof applicationSchema>;
-export const stateSchema=z.object({profile:profileSchema.nullable(),jobs:z.array(jobSchema).max(100),applications:z.array(applicationSchema).max(100)}).superRefine((s,ctx)=>{if(new Set(s.jobs.map(j=>j.id)).size!==s.jobs.length||new Set(s.applications.map(a=>a.jobId)).size!==s.applications.length)ctx.addIssue({code:z.ZodIssueCode.custom,message:'Повторяющиеся записи'});if(s.applications.some(a=>!s.jobs.some(j=>j.id===a.jobId)&&!demoJobs.some(j=>j.id===a.jobId)))ctx.addIssue({code:z.ZodIssueCode.custom,message:'Вакансия не найдена'})});
-export type ProductState=z.infer<typeof stateSchema>;
-export const emptyState:ProductState={profile:null,jobs:[],applications:[]};
-export const defaultProfile:Profile={name:'',role:'',city:'Москва',salary:150000,format:'Удалённо',experience:'1–3 года',skills:'',resume:'',preferences:''};
-export const demoProfile:Profile={name:'Александр',role:'Продуктовый дизайнер',city:'Москва',salary:180000,format:'Удалённо',experience:'3–6 лет',skills:'Figma, UX-исследования, Прототипирование, Дизайн-системы',resume:'Продуктовый дизайнер. Проектировал веб-интерфейсы и мобильные приложения. Работал с дизайн-системой, проводил пользовательские интервью и собирал интерактивные прототипы в Figma.',preferences:'Продуктовая команда с прозрачными процессами.'};
-export const demoJobs:Job[]=[
-{id:'demo-1',title:'Продуктовый дизайнер',company:'Пункт',city:'Москва',salaryMin:180000,salaryMax:250000,format:'Удалённо',experience:'3–6 лет',skills:['Figma','UX-исследования','Дизайн-системы'],description:'Помогать людям решать ежедневные задачи в цифровом продукте. Проектировать сценарии, проверять гипотезы с пользователями и развивать дизайн-систему вместе с разработчиками. Ищем портфолио с объяснением принятых решений.',url:'',demo:true},
-{id:'demo-2',title:'UX/UI-дизайнер',company:'Среда',city:'Санкт-Петербург',salaryMin:150000,salaryMax:210000,format:'Гибрид',experience:'1–3 года',skills:['Figma','Прототипирование','UI-дизайн'],description:'Развивать интерфейс сервиса для малого бизнеса: от первых набросков до передачи макетов в разработку. Важны системность и внимание к деталям.',url:'',demo:true},
-{id:'demo-3',title:'Senior Product Designer',company:'Орбита',city:'Москва',salaryMin:230000,salaryMax:310000,format:'Удалённо',experience:'Более 6 лет',skills:['Figma','Дизайн-системы','Аналитика','Английский'],description:'Отвечать за дизайн направления, проводить исследования и работать с метриками. Потребуются опыт сложных B2B-продуктов и английский для работы с международной командой.',url:'',demo:true},
-{id:'demo-4',title:'Frontend-разработчик',company:'Слой',city:'Казань',salaryMin:180000,salaryMax:280000,format:'Удалённо',experience:'3–6 лет',skills:['React','TypeScript','CSS','Git'],description:'Разрабатывать интерфейсы платформы, работать с API и поддерживать качество кода. Понадобятся React, TypeScript и опыт командной разработки.',url:'',demo:true},
-{id:'demo-5',title:'Продуктовый аналитик',company:'Контур пути',city:'Москва',salaryMin:170000,salaryMax:250000,format:'Гибрид',experience:'1–3 года',skills:['SQL','Python','A/B-тесты'],description:'Анализировать поведение пользователей, строить отчёты и оценивать продуктовые эксперименты. Уметь объяснять выводы команде.',url:'',demo:true},
-{id:'demo-6',title:'Менеджер продукта',company:'Масштаб',city:'Москва',salaryMin:200000,salaryMax:300000,format:'Офис',experience:'3–6 лет',skills:['CustDev','Аналитика','Roadmap'],description:'Развивать продукт: проверять потребности, планировать изменения и синхронизировать команду. Важны опыт приоритизации и работа с метриками.',url:'',demo:true}];
-export function skillMatch(profile:Profile|null,job:Job){const known=(profile?.skills||'').toLocaleLowerCase().split(/[,;\n]/).map(s=>s.trim()).filter(Boolean);return job.skills.map(skill=>({skill,matched:known.includes(skill.toLocaleLowerCase())}))}
-export function score(profile:Profile|null,job:Job){const matches=skillMatch(profile,job);return matches.length?Math.round(matches.filter(m=>m.matched).length/matches.length*100):0}
-export function salary(job:Job){const n=(v:number)=>v.toLocaleString('ru-RU');return job.salaryMin&&job.salaryMax?`${n(job.salaryMin)}–${n(job.salaryMax)} ₽`:job.salaryMin?`от ${n(job.salaryMin)} ₽`:job.salaryMax?`до ${n(job.salaryMax)} ₽`:'Зарплата не указана'}
-export function makeLetter(p:Profile,j:Job){const skills=skillMatch(p,j).filter(m=>m.matched).map(m=>m.skill);return `Здравствуйте, команда «${j.company}»!\n\nМеня заинтересовала позиция «${j.title}». ${skills.length?'В моём профиле указаны навыки, которые вы ищете: '+skills.join(', ')+'.':'Хочу обсудить требования к позиции и рассказать о своём опыте.'}\n\n${p.resume?p.resume+'\n\n':''}Буду рад обсудить задачи команды и то, чем могу быть полезен.\n\nС уважением,\n${p.name}`}
-export function makeResume(p:Profile,j:Job){const skills=skillMatch(p,j).filter(m=>m.matched).map(m=>m.skill);return `${p.name}\nЖелаемая позиция: ${j.title}\n${p.city} · ${p.format}\n\nНАВЫКИ ПОД ПОЗИЦИЮ\n${skills.join(', ')||'Уточните навыки в профиле'}\n\nОПЫТ\n${p.resume||'Добавьте описание реального опыта в профиль.'}\n\nВСЕ НАВЫКИ\n${p.skills}`}
-export function newApplication(jobId:string):Application{return {jobId,status:'Сохранено',notes:'',nextDate:'',letter:'',resume:'',updatedAt:new Date().toISOString(),history:[{status:'Сохранено',date:new Date().toISOString()}]}}
+import { z } from "zod";
+export const statuses = [
+  "Сохранено",
+  "Готовится",
+  "Отправлено",
+  "Интервью",
+  "Оффер",
+  "Отказ",
+  "Архив",
+] as const;
+export const profileSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  role: z.string().trim().min(2).max(160),
+  city: z.string().trim().max(100),
+  salary: z.number().int().min(0).max(10000000),
+  format: z.enum(["Любой", "Удалённо", "Гибрид", "Офис"]),
+  experience: z.enum(["Без опыта", "1–3 года", "3–6 лет", "Более 6 лет"]),
+  skills: z.string().max(2000),
+  resume: z.string().max(20000),
+  preferences: z.string().max(2000),
+});
+export type Profile = z.infer<typeof profileSchema>;
+export const jobSchema = z
+  .object({
+    id: z.string().max(80),
+    title: z.string().trim().min(2).max(160),
+    company: z.string().trim().min(1).max(100),
+    city: z.string().max(100),
+    salaryMin: z.number().min(0).max(10000000),
+    salaryMax: z.number().min(0).max(10000000),
+    format: z.enum(["Удалённо", "Гибрид", "Офис"]),
+    experience: z.string().max(60),
+    skills: z.array(z.string().trim().min(1).max(80)).max(30),
+    description: z.string().max(15000),
+    url: z
+      .string()
+      .max(2048)
+      .refine((v) => !v || /^https:\/\//i.test(v), "Нужна ссылка https://"),
+    applyUrl: z
+      .string()
+      .max(2048)
+      .refine((v) => !v || /^https:\/\//i.test(v), "Нужна ссылка https://")
+      .optional()
+      .default(""),
+    source: z.enum(["manual", "hh", "demo"]).optional().default("manual"),
+    sourceId: z.string().max(80).optional().default(""),
+    publishedAt: z.string().max(40).optional().default(""),
+    companyTrusted: z.boolean().optional().default(false),
+    salaryCurrency: z.string().trim().min(1).max(8).optional().default("RUR"),
+    salaryGross: z.boolean().optional().default(false),
+    demo: z.boolean(),
+  })
+  .refine(
+    (j) => j.salaryMax === 0 || j.salaryMax >= j.salaryMin,
+    "Верхняя граница зарплаты меньше нижней",
+  );
+export type Job = z.infer<typeof jobSchema>;
+export const aiAnalysisSchema = z.object({
+  fitScore: z.number().int().min(0).max(100),
+  summary: z.string().trim().min(1).max(2000),
+  strengths: z.array(z.string().trim().min(1).max(300)).max(8),
+  gaps: z.array(z.string().trim().min(1).max(300)).max(8),
+  questions: z.array(z.string().trim().min(1).max(300)).max(8),
+  risks: z.array(z.string().trim().min(1).max(300)).max(8),
+  generatedAt: z.string().max(40),
+  model: z.string().max(160),
+});
+export type AiAnalysis = z.infer<typeof aiAnalysisSchema>;
+const applicationSchema = z.object({
+  jobId: z.string().max(80),
+  status: z.enum(statuses),
+  notes: z.string().max(5000),
+  nextDate: z.string().max(10),
+  letter: z.string().max(20000),
+  resume: z.string().max(30000),
+  analysis: aiAnalysisSchema.nullable().optional().default(null),
+  updatedAt: z.string().max(40),
+  history: z
+    .array(z.object({ status: z.enum(statuses), date: z.string().max(40) }))
+    .max(100),
+});
+export type Application = z.infer<typeof applicationSchema>;
+export const stateSchema = z
+  .object({
+    profile: profileSchema.nullable(),
+    jobs: z.array(jobSchema).max(100),
+    applications: z.array(applicationSchema).max(100),
+  })
+  .superRefine((s, ctx) => {
+    if (
+      new Set(s.jobs.map((j) => j.id)).size !== s.jobs.length ||
+      new Set(s.applications.map((a) => a.jobId)).size !== s.applications.length
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Повторяющиеся записи",
+      });
+    if (
+      s.applications.some(
+        (a) =>
+          !s.jobs.some((j) => j.id === a.jobId) &&
+          !demoJobs.some((j) => j.id === a.jobId),
+      )
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Вакансия не найдена",
+      });
+  });
+export type ProductState = z.infer<typeof stateSchema>;
+export const emptyState: ProductState = {
+  profile: null,
+  jobs: [],
+  applications: [],
+};
+export const defaultProfile: Profile = {
+  name: "",
+  role: "",
+  city: "Москва",
+  salary: 150000,
+  format: "Удалённо",
+  experience: "1–3 года",
+  skills: "",
+  resume: "",
+  preferences: "",
+};
+export const demoProfile: Profile = {
+  name: "Александр",
+  role: "Продуктовый дизайнер",
+  city: "Москва",
+  salary: 180000,
+  format: "Удалённо",
+  experience: "3–6 лет",
+  skills: "Figma, UX-исследования, Прототипирование, Дизайн-системы",
+  resume:
+    "Продуктовый дизайнер. Проектировал веб-интерфейсы и мобильные приложения. Работал с дизайн-системой, проводил пользовательские интервью и собирал интерактивные прототипы в Figma.",
+  preferences: "Продуктовая команда с прозрачными процессами.",
+};
+export const demoJobs: Job[] = z
+  .array(jobSchema)
+  .parse([
+    {
+      id: "demo-1",
+      title: "Продуктовый дизайнер",
+      company: "Пункт",
+      city: "Москва",
+      salaryMin: 180000,
+      salaryMax: 250000,
+      format: "Удалённо",
+      experience: "3–6 лет",
+      skills: ["Figma", "UX-исследования", "Дизайн-системы"],
+      description:
+        "Помогать людям решать ежедневные задачи в цифровом продукте. Проектировать сценарии, проверять гипотезы с пользователями и развивать дизайн-систему вместе с разработчиками. Ищем портфолио с объяснением принятых решений.",
+      url: "",
+      demo: true,
+    },
+    {
+      id: "demo-2",
+      title: "UX/UI-дизайнер",
+      company: "Среда",
+      city: "Санкт-Петербург",
+      salaryMin: 150000,
+      salaryMax: 210000,
+      format: "Гибрид",
+      experience: "1–3 года",
+      skills: ["Figma", "Прототипирование", "UI-дизайн"],
+      description:
+        "Развивать интерфейс сервиса для малого бизнеса: от первых набросков до передачи макетов в разработку. Важны системность и внимание к деталям.",
+      url: "",
+      demo: true,
+    },
+    {
+      id: "demo-3",
+      title: "Senior Product Designer",
+      company: "Орбита",
+      city: "Москва",
+      salaryMin: 230000,
+      salaryMax: 310000,
+      format: "Удалённо",
+      experience: "Более 6 лет",
+      skills: ["Figma", "Дизайн-системы", "Аналитика", "Английский"],
+      description:
+        "Отвечать за дизайн направления, проводить исследования и работать с метриками. Потребуются опыт сложных B2B-продуктов и английский для работы с международной командой.",
+      url: "",
+      demo: true,
+    },
+    {
+      id: "demo-4",
+      title: "Frontend-разработчик",
+      company: "Слой",
+      city: "Казань",
+      salaryMin: 180000,
+      salaryMax: 280000,
+      format: "Удалённо",
+      experience: "3–6 лет",
+      skills: ["React", "TypeScript", "CSS", "Git"],
+      description:
+        "Разрабатывать интерфейсы платформы, работать с API и поддерживать качество кода. Понадобятся React, TypeScript и опыт командной разработки.",
+      url: "",
+      demo: true,
+    },
+    {
+      id: "demo-5",
+      title: "Продуктовый аналитик",
+      company: "Контур пути",
+      city: "Москва",
+      salaryMin: 170000,
+      salaryMax: 250000,
+      format: "Гибрид",
+      experience: "1–3 года",
+      skills: ["SQL", "Python", "A/B-тесты"],
+      description:
+        "Анализировать поведение пользователей, строить отчёты и оценивать продуктовые эксперименты. Уметь объяснять выводы команде.",
+      url: "",
+      demo: true,
+    },
+    {
+      id: "demo-6",
+      title: "Менеджер продукта",
+      company: "Масштаб",
+      city: "Москва",
+      salaryMin: 200000,
+      salaryMax: 300000,
+      format: "Офис",
+      experience: "3–6 лет",
+      skills: ["CustDev", "Аналитика", "Roadmap"],
+      description:
+        "Развивать продукт: проверять потребности, планировать изменения и синхронизировать команду. Важны опыт приоритизации и работа с метриками.",
+      url: "",
+      demo: true,
+    },
+  ])
+  .map((job) => ({ ...job, source: "demo" as const }));
+export function skillMatch(profile: Profile | null, job: Job) {
+  const known = (profile?.skills || "")
+    .toLocaleLowerCase()
+    .split(/[,;\n]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return job.skills.map((skill) => ({
+    skill,
+    matched: known.includes(skill.toLocaleLowerCase()),
+  }));
+}
+export function score(profile: Profile | null, job: Job) {
+  const matches = skillMatch(profile, job);
+  return matches.length
+    ? Math.round(
+        (matches.filter((m) => m.matched).length / matches.length) * 100,
+      )
+    : 0;
+}
+export function salary(job: Job) {
+  const n = (v: number) => v.toLocaleString("ru-RU");
+  const symbols: Record<string, string> = {
+    RUR: "₽",
+    RUB: "₽",
+    USD: "$",
+    EUR: "€",
+    KZT: "₸",
+    BYR: "Br",
+    BYN: "Br",
+  };
+  const unit = symbols[job.salaryCurrency] || job.salaryCurrency;
+  const value =
+    job.salaryMin && job.salaryMax
+      ? `${n(job.salaryMin)}–${n(job.salaryMax)} ${unit}`
+      : job.salaryMin
+        ? `от ${n(job.salaryMin)} ${unit}`
+        : job.salaryMax
+          ? `до ${n(job.salaryMax)} ${unit}`
+          : "Зарплата не указана";
+  return value;
+}
+export function makeLetter(p: Profile, j: Job) {
+  const skills = skillMatch(p, j)
+    .filter((m) => m.matched)
+    .map((m) => m.skill);
+  return `Здравствуйте, команда «${j.company}»!\n\nМеня заинтересовала позиция «${j.title}». ${skills.length ? "В моём профиле указаны навыки, которые вы ищете: " + skills.join(", ") + "." : "Хочу обсудить требования к позиции и рассказать о своём опыте."}\n\n${p.resume ? p.resume + "\n\n" : ""}Буду рад обсудить задачи команды и то, чем могу быть полезен.\n\nС уважением,\n${p.name}`;
+}
+export function makeResume(p: Profile, j: Job) {
+  const skills = skillMatch(p, j)
+    .filter((m) => m.matched)
+    .map((m) => m.skill);
+  return `${p.name}\nЖелаемая позиция: ${j.title}\n${p.city} · ${p.format}\n\nНАВЫКИ ПОД ПОЗИЦИЮ\n${skills.join(", ") || "Уточните навыки в профиле"}\n\nОПЫТ\n${p.resume || "Добавьте описание реального опыта в профиль."}\n\nВСЕ НАВЫКИ\n${p.skills}`;
+}
+export function newApplication(jobId: string): Application {
+  return {
+    jobId,
+    status: "Сохранено",
+    notes: "",
+    nextDate: "",
+    letter: "",
+    resume: "",
+    analysis: null,
+    updatedAt: new Date().toISOString(),
+    history: [{ status: "Сохранено", date: new Date().toISOString() }],
+  };
+}
