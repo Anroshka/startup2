@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { aiAnalysisSchema, jobSchema, profileSchema } from "@/lib/product";
 import { getCurrentUser } from "@/lib/supabase/server";
+import { reserveAiRequest, recordAiUsage } from "@/lib/ai-quota";
+import { verifyRequirements } from "@/lib/evidence";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -19,16 +21,28 @@ const analysisJsonSchema = {
     type: "object",
     additionalProperties: false,
     properties: {
-      fitScore: { type: "integer", minimum: 0, maximum: 100 },
       summary: { type: "string" },
+      requirements: {
+        type: "array", maxItems: 12,
+        items: {
+          type: "object", additionalProperties: false,
+          properties: {
+            requirement: { type: "string" },
+            verdict: { type: "string", enum: ["confirmed", "unclear", "conflict"] },
+            evidence: { type: "string" },
+            explanation: { type: "string" },
+          },
+          required: ["requirement", "verdict", "evidence", "explanation"],
+        },
+      },
       strengths: { type: "array", items: { type: "string" }, maxItems: 8 },
       gaps: { type: "array", items: { type: "string" }, maxItems: 8 },
       questions: { type: "array", items: { type: "string" }, maxItems: 8 },
       risks: { type: "array", items: { type: "string" }, maxItems: 8 },
     },
     required: [
-      "fitScore",
       "summary",
+      "requirements",
       "strengths",
       "gaps",
       "questions",
@@ -49,7 +63,7 @@ function reply(body: unknown, status = 200) {
 
 function taskPrompt(type: "analysis" | "letter" | "resume") {
   if (type === "analysis") {
-    return "Оцени соответствие кандидата вакансии. Опирайся только на явно указанные факты. Не считай отсутствие сведений доказательством отсутствия навыка: вынеси это в gaps или questions. Пиши кратко и конкретно на русском.";
+    return "Выдели до 12 конкретных требований из текста вакансии и оцени каждое: confirmed только при дословной цитате из профиля кандидата (evidence); unclear, если в профиле недостаточно сведений; conflict только при явном противоречии, подтверждённом дословной цитатой из профиля. requirement цитируй из вакансии, без перефразирования. Для unclear evidence оставь пустым. Не оценивай вероятность приглашения. Пиши кратко на русском.";
   }
   if (type === "letter") {
     return "Напиши персональное сопроводительное письмо на русском: 900–1600 знаков, без канцелярита и клише. Используй только факты профиля, ничего не выдумывай. Объясни релевантность опыта задачам вакансии. Не добавляй тему письма, Markdown и плейсхолдеры.";
@@ -79,10 +93,17 @@ export async function POST(request: Request) {
     );
 
   try {
-    const parsed = requestSchema.safeParse(await request.json());
+    const rawRequest = await request.text();
+    if (rawRequest.length > 100_000) return reply({ error: "Слишком большой запрос." }, 413);
+    let input: unknown;
+    try { input = JSON.parse(rawRequest); }
+    catch { return reply({ error: "Некорректный JSON." }, 400); }
+    const parsed = requestSchema.safeParse(input);
     if (!parsed.success)
       return reply({ error: parsed.error.issues[0].message }, 400);
     const { type, profile, job } = parsed.data;
+    if (!(await reserveAiRequest(user.id)))
+      return reply({ error: "Дневной лимит AI-разборов и документов исчерпан (20 запросов)." }, 429);
     const model = process.env.OPENROUTER_MODEL?.trim() || "openai/gpt-5.2";
     const payload: Record<string, unknown> = {
       model,
@@ -156,12 +177,19 @@ export async function POST(request: Request) {
       .parse(await response.json());
     const content = body.choices[0].message.content?.trim();
     if (!content) throw new Error("OPENROUTER_EMPTY");
+    await recordAiUsage(user.id, body.usage?.total_tokens || 0, body.usage?.cost || 0);
 
     if (type === "analysis") {
-      const analysis = aiAnalysisSchema.parse({
+      const raw = aiAnalysisSchema.parse({
         ...JSON.parse(content),
+        fitScore: null,
         generatedAt: new Date().toISOString(),
         model: body.model || model,
+      });
+      const verified = verifyRequirements(raw.requirements, profile, job);
+      const analysis = aiAnalysisSchema.parse({
+        ...raw,
+        ...verified,
       });
       return reply({ analysis, usage: body.usage || null });
     }
@@ -177,8 +205,8 @@ export async function POST(request: Request) {
       error instanceof Error ? error.message : error,
     );
     return reply(
-      { error: "Не удалось подготовить результат. Повторите запрос." },
-      502,
+      { error: error instanceof Error && error.message === "AI_QUOTA_NOT_CONFIGURED" ? "AI-лимит ещё не настроен на сервере." : "Не удалось подготовить результат. Повторите запрос." },
+      error instanceof Error && error.message === "AI_QUOTA_NOT_CONFIGURED" ? 503 : 502,
     );
   }
 }

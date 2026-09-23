@@ -73,8 +73,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster, toast } from "sonner";
+import { diffWordsWithSpace } from "diff";
 import { Choice } from "@/app/onboarding/onboarding";
 import { useProduct } from "@/lib/use-product";
+import AgentPanel from "./agent-panel";
 import {
   demoJobs,
   demoProfile,
@@ -94,6 +96,7 @@ const nav = [
   ["vacancies", "Мой поиск", Radar],
   ["saved", "Сохранённое", Bookmark],
   ["tracker", "Отклики", Columns3],
+  ["agent", "Автоотклик", Sparkles],
   ["documents", "Мои документы", FileText],
   ["profile", "Мой профиль", UserRound],
 ] as const;
@@ -134,8 +137,14 @@ export default function Workspace({
     [detailTab, setDetailTab] = useState("match"),
     [addOpen, setAddOpen] = useState(false),
     [deleteOpen, setDeleteOpen] = useState(false),
+    [accountDeleteOpen, setAccountDeleteOpen] = useState(false),
+    [accountConfirmation, setAccountConfirmation] = useState(""),
+    [deletingAccount, setDeletingAccount] = useState(false),
+    [reviewOpen, setReviewOpen] = useState(false),
     [working, setWorking] = useState(false),
     [remoteJobs, setRemoteJobs] = useState<Job[]>([]),
+    [searchPage, setSearchPage] = useState(0),
+    [searchPages, setSearchPages] = useState(0),
     [searching, setSearching] = useState(false),
     [searchError, setSearchError] = useState(""),
     [foundJobs, setFoundJobs] = useState(0),
@@ -153,6 +162,10 @@ export default function Workspace({
     return [...new Map(all.map((job) => [job.id, job])).values()];
   }, [state.jobs, remoteJobs, demo]);
   const busy = working || product.saving || !!aiBusy;
+  const resumeChanges = useMemo(
+    () => reviewOpen ? diffWordsWithSpace(profile?.resume || "", resume) : [],
+    [reviewOpen, profile?.resume, resume],
+  );
   const writing = useRef(false);
   const autoSearched = useRef(false);
   const profileRole = profile?.role;
@@ -222,7 +235,7 @@ export default function Workspace({
       setFullJobLoading(false);
     }
   }
-  async function searchJobs(text = query) {
+  async function searchJobs(text = query, page = 0) {
     if (!profile || demo) return;
     if (text.trim().length < 2) {
       setSearchError("Введите должность или ключевые слова.");
@@ -240,21 +253,26 @@ export default function Workspace({
           salary: profile.salary,
           experience: profile.experience,
           format: profile.format,
-          page: 0,
+          page,
         }),
       });
       const body = (await response.json()) as {
         jobs?: Job[];
         found?: number;
+        page?: number;
+        pages?: number;
         error?: string;
       };
       if (!response.ok || !body.jobs)
         throw new Error(body.error || "Не удалось выполнить поиск.");
       setRemoteJobs(body.jobs);
       setFoundJobs(body.found || body.jobs.length);
+      setSearchPage(body.page ?? page);
+      setSearchPages(body.pages ?? 0);
     } catch (error) {
       setRemoteJobs([]);
       setFoundJobs(0);
+      setSearchPages(0);
       setSearchError(
         error instanceof Error ? error.message : "Не удалось выполнить поиск.",
       );
@@ -363,13 +381,6 @@ export default function Workspace({
     }
   }
   const visible = jobs
-    .filter(
-      (j) =>
-        !query ||
-        `${j.title} ${j.company} ${j.skills.join(" ")}`
-          .toLowerCase()
-          .includes(query.toLowerCase()),
-    )
     .filter((j) => format === "Любой" || j.format === format)
     .filter(
       (j) =>
@@ -836,11 +847,7 @@ export default function Workspace({
                               ) : (
                                 <Radar size={14} />
                               )}{" "}
-                              {
-                                skillMatch(profile, j).filter((m) => m.matched)
-                                  .length
-                              }{" "}
-                              из {j.skills.length} навыков
+                              {j.skills.length ? <>{skillMatch(profile, j).filter((m) => m.matched).length} из {j.skills.length} навыков</> : "Навыки не указаны"}
                             </span>
                             <button onClick={() => openJob(j)}>
                               Подробнее <ArrowUpRight size={16} />
@@ -851,6 +858,25 @@ export default function Workspace({
                       );
                     })}
                   </div>
+                  {!demo && source !== "own" && searchPages > 1 && (
+                    <nav className="search-pagination" aria-label="Страницы вакансий">
+                      <button
+                        className="btn ghost"
+                        disabled={searching || searchPage === 0}
+                        onClick={() => void searchJobs(query || profile?.role || "", searchPage - 1)}
+                      >
+                        Предыдущая
+                      </button>
+                      <span>Страница {searchPage + 1} из {searchPages}</span>
+                      <button
+                        className="btn ghost"
+                        disabled={searching || searchPage + 1 >= searchPages}
+                        onClick={() => void searchJobs(query || profile?.role || "", searchPage + 1)}
+                      >
+                        Следующая
+                      </button>
+                    </nav>
+                  )}
                   {!visible.length && !searching && (
                     <div className="empty-state">
                       <Search size={32} />
@@ -997,6 +1023,8 @@ export default function Workspace({
                   </p>
                 </>
               )}
+              {view === "agent" && !demo && <AgentPanel hasProfile={Boolean(profile?.role && profile?.skills && profile?.resume)} />}
+              {view === "agent" && demo && <div className="empty-state"><h2>Автоотклик доступен после входа</h2><Link className="btn primary" href="/login">Войти</Link></div>}
               {view === "documents" && (
                 <>
                   <div className="page-heading">
@@ -1121,6 +1149,11 @@ export default function Workspace({
                         </button>
                       </form>
                     )}
+                    {!demo && (
+                      <button className="btn ghost" onClick={() => setAccountDeleteOpen(true)}>
+                        <Trash2 size={17} /> Удалить аккаунт и данные
+                      </button>
+                    )}
                   </div>
                   <div className="prototype-info">
                     <Info size={19} />
@@ -1209,7 +1242,10 @@ export default function Workspace({
                     </p>
                   )}
                   {current(selected)?.analysis ? (
-                    <AiAnalysisView analysis={current(selected)!.analysis!} />
+                    <>
+                      <AiAnalysisView analysis={current(selected)!.analysis!} />
+                      <button className="btn ghost" disabled={demo || !profile || !!aiBusy || fullJobLoading} onClick={() => void runAi("analysis")}>Обновить разбор после изменения профиля</button>
+                    </>
                   ) : (
                     <div className="ai-callout">
                       <div>
@@ -1379,6 +1415,7 @@ export default function Workspace({
                     AI переставит акценты под вакансию, не добавляя выдуманный
                     опыт, навыки или достижения.
                   </p>
+                  <p className="field-hint">При генерации текст профиля и вакансии передаётся OpenRouter. Проверьте черновик перед использованием.</p>
                   {!resume ? (
                     <div className="draft-empty">
                       <FileText size={28} />
@@ -1402,6 +1439,17 @@ export default function Workspace({
                     </div>
                   ) : (
                     <>
+                      <details className="resume-review" onToggle={(event) => setReviewOpen(event.currentTarget.open)}>
+                        <summary>Сравнить с исходным резюме и проверить изменения</summary>
+                        {reviewOpen && <div className="resume-review-grid">
+                          <div><h4>Ваш исходный текст</h4><pre>{profile?.resume || "В профиле нет исходного резюме."}</pre></div>
+                          <div><h4>Изменения в черновике</h4><div className="resume-diff">
+                            {resumeChanges.map((part, index) => (
+                              <span key={index} className={part.added ? "added" : part.removed ? "removed" : ""}>{part.value}</span>
+                            ))}
+                          </div></div>
+                        </div>}
+                      </details>
                       <label className="field">
                         <span className="sr-only">Текст резюме</span>
                         <textarea
@@ -1421,6 +1469,7 @@ export default function Workspace({
                       >
                         <Download size={17} /> Скачать .txt
                       </button>
+                      <button className="btn ghost" disabled={!!aiBusy || demo || dirty} onClick={() => void runAi("resume")}>Сгенерировать снова</button>
                     </>
                   )}
                 </TabsContent>
@@ -1606,6 +1655,30 @@ export default function Workspace({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <AlertDialog open={accountDeleteOpen} onOpenChange={setAccountDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить аккаунт и все данные?</AlertDialogTitle>
+            <AlertDialogDescription>Профиль, сохранённые вакансии, разборы, документы и история откликов будут удалены без возможности восстановления. Введите УДАЛИТЬ для подтверждения.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <input aria-label="Подтверждение удаления аккаунта" value={accountConfirmation} onChange={(e) => setAccountConfirmation(e.target.value)} placeholder="УДАЛИТЬ" autoComplete="off" />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <button className="btn primary" disabled={deletingAccount || accountConfirmation !== "УДАЛИТЬ"} onClick={async () => {
+              setDeletingAccount(true);
+              try {
+                const response = await fetch("/api/account", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmation: accountConfirmation }) });
+                const body = (await response.json()) as { error?: string };
+                if (!response.ok) throw new Error(body.error || "Не удалось удалить аккаунт.");
+                window.location.href = "/";
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : "Не удалось удалить аккаунт.");
+                setDeletingAccount(false);
+              }
+            }}>Удалить навсегда</button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SidebarProvider>
   );
 }
@@ -1622,9 +1695,23 @@ function AiAnalysisView({ analysis }: { analysis: AiAnalysis }) {
         <span>
           <Sparkles size={17} /> AI-разбор
         </span>
-        <strong>{analysis.fitScore}%</strong>
+        <strong>{analysis.requirements.filter((r) => r.verdict === "confirmed").length} из {analysis.requirements.length} подтверждено</strong>
       </div>
       <p>{analysis.summary}</p>
+      {analysis.requirements.length > 0 && (
+        <div className="evidence-list">
+          <h4>Требования и факты профиля</h4>
+          {analysis.requirements.map((item, index) => (
+            <div className="evidence-item" key={`${item.requirement}-${index}`}>
+              <strong>{item.requirement}</strong>
+              <span>{item.verdict === "confirmed" ? "Подтверждено" : item.verdict === "conflict" ? "Противоречие" : "Нужно уточнить"}</span>
+              {item.evidence && <blockquote>«{item.evidence}»</blockquote>}
+              <p>{item.explanation}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="field-hint">Это разбор требований, а не вероятность получить приглашение. Исправьте профиль, если факт указан неверно.</p>
       <div className="ai-analysis-grid">
         {groups.map(([title, items, tone]) =>
           items.length ? (

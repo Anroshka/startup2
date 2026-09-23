@@ -140,11 +140,6 @@ export function normalizeHhVacancy(item: HhItem | HhVacancy): Job {
       ?.map((skill) => skill.name.trim().slice(0, 80))
       .filter(Boolean)
       .slice(0, 30) || [];
-  const roleSkills =
-    item.professional_roles
-      ?.map((role) => (role.name || "").trim().slice(0, 80))
-      .filter(Boolean)
-      .slice(0, 30) || [];
   return jobSchema.parse({
     id: `hh:${item.id}`,
     sourceId: item.id,
@@ -156,7 +151,8 @@ export function normalizeHhVacancy(item: HhItem | HhVacancy): Job {
     ...salaryFromHh(item),
     format: formatFromHh(item),
     experience: (item.experience?.name || "Не указан").slice(0, 60),
-    skills: detailSkills.length ? detailSkills : roleSkills,
+    // Professional roles describe a category, not verified skill requirements.
+    skills: detailSkills,
     description: (stripHhHtml(detail?.description) || snippet).slice(0, 15_000),
     url: (item.alternate_url || "").slice(0, 2048),
     applyUrl: (item.apply_alternate_url || item.alternate_url || "").slice(

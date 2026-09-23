@@ -30,9 +30,14 @@ function callbackUrl(next: string) {
 export default function LoginPage() {
   const [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
+    [agreement, setAgreement] = useState(false),
     [loading, setLoading] = useState(""),
     [message, setMessage] = useState("");
   async function oauth(provider: "google" | "github") {
+    if (!agreement) {
+      setMessage("Подтвердите ознакомление с соглашением о содействии в трудоустройстве.");
+      return;
+    }
     setLoading(provider);
     setMessage("");
     const supabase = createClient(),
@@ -47,6 +52,10 @@ export default function LoginPage() {
     }
   }
   async function emailAuth(mode: "signin" | "signup") {
+    if (mode === "signup" && !agreement) {
+      setMessage("Подтвердите ознакомление с соглашением о содействии в трудоустройстве.");
+      return;
+    }
     if (!email || password.length < 6) {
       setMessage("Введите email и пароль минимум из 6 символов.");
       return;
@@ -120,6 +129,7 @@ export default function LoginPage() {
           <p className="form-intro">
             Продолжите через Google или GitHub либо используйте email.
           </p>
+          <label className="auth-agreement"><input type="checkbox" checked={agreement} onChange={(event) => setAgreement(event.target.checked)} /><span>Регистрируясь, я подтверждаю, что ознакомлен(а), согласен(на) и принимаю <a href="https://hh.ru/account/agreement" target="_blank" rel="noopener noreferrer">Соглашение об оказании услуг по содействию в трудоустройстве (оферта)</a>.</span></label>
           <div className={`${styles.socials} auth-social`}>
             <button
               className={`${styles.button} btn ghost`}

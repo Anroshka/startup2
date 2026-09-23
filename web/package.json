@@ -13,6 +13,7 @@
     "dev:cloudflare": "node scripts/run-framework.mjs dev",
     "build:cloudflare": "node scripts/run-framework.mjs build",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "test": "node --experimental-strip-types --test scripts/evidence.test.mjs && node --experimental-vm-modules scripts/check-product.mjs",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
@@ -25,12 +26,15 @@
     "clsx": "2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.4.0",
+    "diff": "8.0.2",
     "drizzle-orm": "0.45.2",
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^1.31.0",
+    "mammoth": "1.10.0",
     "next": "16.3.4",
     "next-themes": "^0.4.6",
+    "pdf-parse": "2.4.5",
     "radix-ui": "^1.6.7",
     "react": "19.2.6",
     "react-day-picker": "^10.0.1",

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser } from '@/lib/supabase/server';
 import { emptyState,stateSchema } from '@/lib/product';
 export const dynamic='force-dynamic';
 const reply=(body:unknown,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
@@ -6,9 +7,8 @@ const reply=(body:unknown,status=200)=>Response.json(body,{status,headers:{'Cach
 export async function GET(){
   try{
     const supabase=await createClient();
-    const {data:claimsData,error:claimsError}=await supabase.auth.getClaims();
-    const userId=claimsData?.claims?.sub;
-    if(claimsError||!userId)return reply({error:'Войдите, чтобы открыть свой профиль.'},401);
+    const userId=(await getCurrentUser())?.id;
+    if(!userId)return reply({error:'Войдите, чтобы открыть свой профиль.'},401);
     const {data,error}=await supabase.from('workspaces').select('data,revision').eq('user_id',userId).maybeSingle();
     if(error)throw error;
     return reply({state:data?.data??emptyState,revision:data?.revision??0});
@@ -18,9 +18,8 @@ export async function GET(){
 export async function PUT(request:Request){
   try{
     const supabase=await createClient();
-    const {data:claimsData,error:claimsError}=await supabase.auth.getClaims();
-    const userId=claimsData?.claims?.sub;
-    if(claimsError||!userId)return reply({error:'Нужно войти в аккаунт.'},401);
+    const userId=(await getCurrentUser())?.id;
+    if(!userId)return reply({error:'Нужно войти в аккаунт.'},401);
     if(request.headers.get('sec-fetch-site')==='cross-site')return reply({error:'Запрос отклонён.'},403);
     if(!request.headers.get('content-type')?.startsWith('application/json'))return reply({error:'Нужен JSON.'},415);
     if(Number(request.headers.get('content-length')||0)>900000)return reply({error:'Слишком большой объём данных.'},413);
