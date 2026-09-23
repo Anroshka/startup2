@@ -56,8 +56,14 @@ export const jobSchema = z
   );
 export type Job = z.infer<typeof jobSchema>;
 export const aiAnalysisSchema = z.object({
-  fitScore: z.number().int().min(0).max(100),
+  fitScore: z.number().int().min(0).max(100).nullable(),
   summary: z.string().trim().min(1).max(2000),
+  requirements: z.array(z.object({
+    requirement: z.string().trim().min(1).max(250),
+    verdict: z.enum(["confirmed", "unclear", "conflict"]),
+    evidence: z.string().trim().max(300),
+    explanation: z.string().trim().min(1).max(300),
+  })).max(12).optional().default([]),
   strengths: z.array(z.string().trim().min(1).max(300)).max(8),
   gaps: z.array(z.string().trim().min(1).max(300)).max(8),
   questions: z.array(z.string().trim().min(1).max(300)).max(8),

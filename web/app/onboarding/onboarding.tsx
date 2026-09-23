@@ -55,7 +55,8 @@ export default function Onboarding({ signedIn }: { signedIn: boolean }) {
   const { state, loading, error, saving, save, reload } = useProduct(signedIn);
   const [p, setP] = useState<Profile>(defaultProfile),
     [step, setStep] = useState(0),
-    [message, setMessage] = useState("");
+    [message, setMessage] = useState(""),
+    [importNotice, setImportNotice] = useState("");
   const restored = useRef(false),
     file = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -334,24 +335,29 @@ export default function Onboarding({ signedIn }: { signedIn: boolean }) {
                     <input
                       ref={file}
                       type="file"
-                      accept=".txt,text/plain"
+                      accept=".txt,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                       hidden
                       onChange={async (e) => {
                         const f = e.target.files?.[0];
                         if (!f) return;
-                        if (f.size > 80000) {
-                          setMessage("Файл слишком большой. Максимум 80 КБ.");
-                          return;
-                        }
                         try {
-                          const t = await f.text();
-                          if (t.includes("\0") || t.length > 20000)
-                            throw Error();
-                          field("resume", t);
-                        } catch {
-                          setMessage(
-                            "Нужен текстовый файл .txt до 20 000 символов.",
-                          );
+                          let text: string;
+                          if (f.name.toLowerCase().endsWith(".txt")) {
+                            if (f.size > 80_000) throw new Error("Текстовый файл слишком большой (до 80 КБ).");
+                            text = await f.text();
+                          } else {
+                            const data = new FormData();
+                            data.set("file", f);
+                            const response = await fetch("/api/resume/import", { method: "POST", body: data });
+                            const result = (await response.json()) as { text?: string; error?: string };
+                            if (!response.ok || !result.text) throw new Error(result.error || "Не удалось прочитать файл.");
+                            text = result.text;
+                          }
+                          if (text.includes("\0") || text.length > 20000) throw new Error("Резюме должно быть короче 20 000 символов.");
+                          field("resume", text);
+                          setImportNotice("Текст извлечён. Проверьте опыт и навыки перед сохранением.");
+                        } catch (error) {
+                          setMessage(error instanceof Error ? error.message : "Не удалось импортировать резюме.");
                         }
                         e.target.value = "";
                       }}
@@ -361,12 +367,12 @@ export default function Onboarding({ signedIn }: { signedIn: boolean }) {
                       className="import-text"
                       onClick={() => file.current?.click()}
                     >
-                      <Upload size={16} /> Импортировать .txt
+                      <Upload size={16} /> Импортировать .txt, PDF или DOCX
                     </button>
                     <p className="field-hint">
-                      Для PDF или Word скопируйте текст сюда. Оригинальный файл
-                      не загружается.
+                      PDF и DOCX обрабатываются после входа. Оригинальный файл не сохраняется; проверьте извлечённый текст.
                     </p>
+                    {importNotice && <p className="field-hint" role="status">{importNotice}</p>}
                   </>
                 )}
                 {step === 3 && (
