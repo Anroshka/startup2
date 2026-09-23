@@ -22,7 +22,7 @@ export async function GET() {
     if (row?.access_token) {
       try {
         const token = await accessToken(row);
-        const response = await hhRequest("/resumes/mine?per_page=100", token);
+        const response = await hhRequest("/resumes/mine", token);
         if (response.ok) {
           const body = z.object({ items: z.array(z.object({ id: z.string(), title: z.string().nullish() })) }).parse(await response.json());
           resumes = body.items.map((item) => ({ id: item.id, title: item.title || "Резюме без названия" }));
@@ -58,7 +58,7 @@ export async function PUT(request: Request) {
     if (config.enabled) {
       const full = await admin.from("agent_settings").select("*").eq("user_id", user.id).single();
       if (full.error) throw full.error;
-      const response = await hhRequest("/resumes/mine?per_page=100", await accessToken(full.data));
+      const response = await hhRequest("/resumes/mine", await accessToken(full.data));
       if (!response.ok) return reply({ error: "Не удалось проверить резюме hh.ru." }, 502);
       const resumes = z.object({ items: z.array(z.object({ id: z.string() })) }).parse(await response.json());
       if (!resumes.items.some((item) => item.id === config.resumeId)) return reply({ error: "Резюме не найдено в подключённом аккаунте hh.ru." }, 400);
