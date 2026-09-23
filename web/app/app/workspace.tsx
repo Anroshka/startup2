@@ -76,6 +76,7 @@ import { Toaster, toast } from "sonner";
 import { diffWordsWithSpace } from "diff";
 import { Choice } from "@/app/onboarding/onboarding";
 import { useProduct } from "@/lib/use-product";
+import AgentPanel from "./agent-panel";
 import {
   demoJobs,
   demoProfile,
@@ -95,6 +96,7 @@ const nav = [
   ["vacancies", "Мой поиск", Radar],
   ["saved", "Сохранённое", Bookmark],
   ["tracker", "Отклики", Columns3],
+  ["agent", "Автоотклик", Sparkles],
   ["documents", "Мои документы", FileText],
   ["profile", "Мой профиль", UserRound],
 ] as const;
@@ -1021,6 +1023,8 @@ export default function Workspace({
                   </p>
                 </>
               )}
+              {view === "agent" && !demo && <AgentPanel hasProfile={Boolean(profile?.role && profile?.skills && profile?.resume)} />}
+              {view === "agent" && demo && <div className="empty-state"><h2>Автоотклик доступен после входа</h2><Link className="btn primary" href="/login">Войти</Link></div>}
               {view === "documents" && (
                 <>
                   <div className="page-heading">

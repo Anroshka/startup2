@@ -98,11 +98,37 @@ assert.equal(normalized.format, "Удалённо");
 assert.equal(normalized.companyTrusted, true);
 assert.ok(!normalized.description.includes("<"));
 
+const agentConfig = sourceModule("lib/agent-config.ts");
+await agentConfig.link(() => exportsModule(zod));
+await agentConfig.evaluate();
+const agent = sourceModule("lib/auto-apply.ts");
+await agent.link((name) => {
+  if (name === "@/lib/product") return product;
+  if (name === "@/lib/agent-config") return agentConfig;
+  if (name === "@/lib/hh") return exportsModule({ getHhVacancy: () => {}, searchHhVacancies: () => {} });
+  if (name === "@/lib/ai-quota") return exportsModule({ adminClient: () => {} });
+  if (name === "node:crypto") return exportsModule({ createCipheriv: () => {}, createDecipheriv: () => {}, randomBytes: () => {} });
+  return exportsModule(zod);
+});
+await agent.evaluate();
+const profile = { ...p.demoProfile, role: "Frontend-разработчик", skills: "React, TypeScript", resume: "Разрабатывал интерфейсы на React." };
+const job = { ...normalized, description: "Разработка интерфейсов на React и TypeScript", skills: ["React", "TypeScript"] };
+const config = { ...agentConfig.namespace.defaultAgentConfig, minSalary: 170000 };
+assert.equal(agent.namespace.eligible(profile, job, config), true);
+assert.equal(agent.namespace.eligible({ ...profile, role: "Разработчик интерфейсов" }, { ...job, title: "Разработчик интерфейсов" }, config), true);
+assert.equal(agent.namespace.eligible(profile, { ...job, companyTrusted: false }, config), false);
+assert.equal(agent.namespace.eligible(profile, { ...job, salaryMin: 0 }, config), false);
+assert.equal(agent.namespace.eligible(profile, { ...job, skills: ["Python", "Go"] }, config), false);
+assert.equal(agent.namespace.eligible(profile, job, { ...config, blockedCompanies: ["Пример"] }), false);
+assert.match(agent.namespace.agentLetter(profile, job), /React/);
+assert.equal(agentConfig.namespace.agentConfigSchema.safeParse({ ...config, dailyLimit: 100 }).success, false);
+
 for (const route of [
   "app/api/state/route.ts",
   "app/api/jobs/search/route.ts",
   "app/api/jobs/[id]/route.ts",
   "app/api/ai/route.ts",
+  "app/api/agent/route.ts",
 ]) {
   assert.match(fs.readFileSync(route, "utf8"), /getCurrentUser|getClaims/);
 }
