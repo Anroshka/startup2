@@ -21,7 +21,15 @@ export default function AgentPanel({ hasProfile }: { hasProfile: boolean }) {
       setBlocked(body.config.blockedCompanies.join(", "));
     } catch (error) { toast.error(error instanceof Error ? error.message : "Ошибка загрузки"); }
   }, []);
-  useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has("error")) toast.error("Не удалось подключить hh.ru. Проверьте настройки приложения и повторите попытку.");
+      if (params.get("connected") === "1") toast.success("hh.ru подключён. Выберите резюме и включите агента.");
+      void load();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   async function save(enabled: boolean) {
     setBusy(true);
